@@ -1,8 +1,18 @@
-/*
- * fast_Digital.h
+/**
+ * \file fast_Digital.h
  *
- *  Created on: Feb 1, 2015
- *      Author: Lyle
+ * This is a port-manipulation library for doing things similar to
+ * what you'd find in \c <wiring_digital.c> , e.g. \c digitalWrite() ,
+ * \c digitalRead() and \c pinMode() .
+ *
+ * The primary benefit of using this library is that it uses templates
+ * to compile-time optimize the operations.
+ *
+ * Included as well are some extra convenience structures and functions.
+ *
+ * \date Feb 1, 2015
+ * \author Lyle Moffitt
+ * \copyright MIT License
  */
 
 #ifndef FAST_DIGITAL_H_
