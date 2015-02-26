@@ -35,7 +35,6 @@ void setup()
 	PORTD	^=	0xff;
 	PORTD	=	PORTD + 23;
 	if( PORTD && false ){
-		PORTD << _B{2,3};
 	}
 
 }
