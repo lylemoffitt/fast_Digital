@@ -37,7 +37,7 @@ void setup() {
   pins::LED::blue::write(false);
 
   // set all of MOTORs pins at OUTPUT
-  pins::MOTOR::both::mode( OUTPUT );
+  pins::MOTOR::both::mode( OUTPUT,0xff);
 
 }
 
@@ -64,33 +64,33 @@ void loop() {
 }
 
 struct motor{
-	const Bit_Mask step_masks[4] = { B10011001, B10101010, B01100110, B01010101 };
+	const Bit_Mask step_mask[4] = { B10011001, B10101010, B01100110, B01010101 };
 	unsigned step_index : 2;
 } LEFT,RIGHT;
 
 void inline move(int steps){
 	if(steps>0){
-		for(;steps!=0;--steps){
-			pins::MOTORS::both::write((LEFT.step_mask[LEFT.step_index++]&0x0f) | (RIGHT.step_mask[RIGHT.step_index++]&0xf0));
+		for(;steps!=0; --steps){
+			pins::MOTOR::both::write( (LEFT.step_mask[LEFT.step_index++]&0x0f) | (RIGHT.step_mask[RIGHT.step_index++]&0xf0) );
 		}
 	}else
 	if(steps<0){
 		for(;steps!=0;++steps){
-			pins::MOTORS::both::write((LEFT.step_mask[LEFT.step_index--]&0x0f) | (RIGHT.step_mask[RIGHT.step_index--]&0xf0));
+			pins::MOTOR::both::write( (LEFT.step_mask[LEFT.step_index--]&0x0f) | (RIGHT.step_mask[RIGHT.step_index--]&0xf0) );
 		}
-	}else
+	}else{}
 }
 
 void inline turn(int clockwise){
 	if(clockwise>0){
 		for(;clockwise!=0;--clockwise){
-			pins::MOTORS::both::write((LEFT.step_mask[LEFT.step_index++]&0x0f) | (RIGHT.step_mask[RIGHT.step_index--]&0xf0));
+			pins::MOTOR::both::write( (LEFT.step_mask[LEFT.step_index++]&0x0f) | (RIGHT.step_mask[RIGHT.step_index--]&0xf0) );
 		}
 	}else
 	if(clockwise<0){
 		for(;clockwise!=0;++clockwise){
-			pins::MOTORS::both::write((LEFT.step_mask[LEFT.step_index--]&0x0f) | (RIGHT.step_mask[RIGHT.step_index++]&0xf0));
+			pins::MOTOR::both::write( (LEFT.step_mask[LEFT.step_index--]&0x0f) | (RIGHT.step_mask[RIGHT.step_index++]&0xf0) );
 		}
-	}else
+	}else{}
 }
 

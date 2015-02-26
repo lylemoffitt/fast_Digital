@@ -19,6 +19,8 @@
 #define FAST_DIGITAL_H_
 
 #include <Arduino.h>
+#include <binary.h>
+#include <stddef.h>
 
 
 /**
@@ -32,7 +34,7 @@ struct bit_list{
 	value_type value;
 
 	/// Cast to \c value_type
-	inline constexpr operator value_type(){
+	inline constexpr operator value_type() const{
 		return value;
 	}
 	/// The size of the value in bits
@@ -50,11 +52,15 @@ struct bit_list{
 	 * \note The number of indexes must be less than \c bit_size()
 	 */
 	template<typename t0, typename ... tN>
-	constexpr bit_list( t0 b0, tN ... bN ) : value( (1<<(b0%bit_size())) | bit_list(bN...).value ){
-		static_assert( (sizeof...(bN) + 1)<bit_size(),"Too many members in initializer array.");
+	constexpr bit_list( t0 b0, tN ... bN ) : value( (1<<((value_type(b0))%bit_size())) | bit_list(bN...).value ){
+		static_assert( (sizeof...(bN) + 1) < bit_size(),"Too many members in initializer array.");
 	}
 };
-static_assert(bit_list({7,3,1})==B10001010,"Bit order error.");
+using _B = bit_list<byte>;
+using _W = bit_list<uint16_t>;
+
+static_assert(bit_list<>({7,3,1})==B10001010,"Bit order error.");
+static_assert(bit_list<uint16_t>({15,14,7,3,1})==uint16_t(B11000000<<8 | B10001010),"Byte order error.");
 
 /**
  * An 8-bit union with a plethora of different breakdowns.
@@ -84,9 +90,10 @@ union Bit_Mask {
 	}
 
 	/**
-	 * Construct from a byte value
+	 * Value-construct from a byte value
 	 */
-	constexpr explicit Bit_Mask( byte v) : value(v){
+	template<typename value_type = byte>
+	constexpr Bit_Mask( value_type v) : value(static_cast<byte>(v)){
 	}
 
 	/**
@@ -104,7 +111,13 @@ union Bit_Mask {
 		return value;
 	}
 
+//	template<typename value_type = byte>
+//	constexpr inline operator value_type (){
+//		return static_cast<value_type>( value );
+//	}
+
 }; // union Bit_Mask
+
 static_assert(sizeof(Bit_Mask)==1,"Size of Bit_Mask incorrect: should be 1 byte.");
 static_assert(Bit_Mask({0,4,7}).value == B10010001,"Initializer bit-order mismatch.");
 static_assert(Bit_Mask(B00000001).b0,"Struct bit-field packing error: bit[0] mismatch.");
@@ -166,19 +179,19 @@ constexpr uint8_t inline mask_to_pin(uint16_t _mask,uint16_t indx=0){
 uint16_t constexpr inline letter_to_PORT_addr(char ltr){
 	return	ltr=='B' ? (uint16_t) & PORTB :
 			ltr=='C' ? (uint16_t) & PORTC :
-			ltr=='D' ? (uint16_t) & PORTD : NOT_A_PORT;
+			ltr=='D' ? (uint16_t) & PORTD : 0;
 }
 /// Get the address of the PINx which ends with specified letter
 uint16_t constexpr inline letter_to_PIN_addr(char ltr){
 	return	ltr=='B' ? (uint16_t) & PINB :
 			ltr=='C' ? (uint16_t) & PINC :
-			ltr=='D' ? (uint16_t) & PIND : NOT_A_PORT;
+			ltr=='D' ? (uint16_t) & PIND : 0;
 }
 /// Get the address of the DDRx which ends with specified letter
 uint16_t constexpr inline letter_to_DDR_addr(char ltr){
 	return	ltr=='B' ? (uint16_t) & DDRB :
 			ltr=='C' ? (uint16_t) & DDRC :
-			ltr=='D' ? (uint16_t) & DDRD : NOT_A_PORT;
+			ltr=='D' ? (uint16_t) & DDRD : 0;
 }
 
 /**
@@ -190,7 +203,6 @@ template< uint16_t addr, class val_t=uint8_t>
 struct MMIO{
 	/// The type of value that can be read from and written to the port. [default \c uint8_t]
 	typedef val_t value_type;
-
 	/**
 	 * Read the Memory-Mapped register
 	 * @return The value of the register cast to \c value_type
@@ -203,22 +215,100 @@ struct MMIO{
 	 * @param value	The value to write to the register.
 	 * @return The value that was written.
 	 */
-	value_type inline static write(value_type value){
-		return (* (volatile value_type *)(addr) ) = value;
-	}
-	/**
-	 * Cast operator; performs the same operation as \c read()
-	 */
-	inline operator value_type (){
-		return (* (volatile value_type *)(addr) );
-	}
-	/**
-	 * Assignment operator; performs the same operation as \c write()
-	 */
-	value_type inline operator =  (value_type val){
-		return (* (volatile value_type *)(addr) ) = val;
+	void inline static write(value_type value){
+		(* (volatile value_type *)(addr) ) = value;
 	}
 
+	/// Cast operator; performs the same operation as \c read()
+	template<typename data_t = value_type>
+	inline operator data_t (){
+		return (* (volatile data_t *)(addr) );
+	}
+
+	/// Pointer to member access operator; useful for accessing bit-field members.
+	inline value_type * operator->() {
+		return ((value_type *)(addr)) ;
+	}
+
+	/// Assignment operator; performs the same operation as \c write()
+	template< typename data_t = value_type >
+	value_type inline operator =  (data_t val){
+		return (* (( value_type *)(addr)) ) = static_cast<value_type>(val);
+	}
+
+	/// Bitwise NOT operator
+	value_type inline operator~() {
+		return ~static_cast<unsigned>(* (value_type *)(addr) );
+	}
+
+#define define_operator( _op_ )                                 \
+	template< typename data_t = value_type >                    \
+	value_type inline operator _op_ (data_t val){               \
+		return ((* (volatile data_t *)(addr) ) _op_ val);       \
+	}                                                           \
+
+	/// Bitwise AND operator.
+	define_operator( & )
+
+	/// Bitwise OR operator.
+	define_operator( | )
+
+	/// Bitwise XOR operator.
+	define_operator( ^ )
+
+	/// Bitwise shift-left operator.
+	define_operator( << )
+
+	/// Bitwise shift-right operator.
+	define_operator( >> )
+
+	/// Bitwise AND-EQUALS operator.
+	define_operator( &= )
+
+	/// Bitwise OR-EQUALS operator.
+	define_operator( |= )
+
+	/// Bitwise XOR-EQUALS operator.
+	define_operator( ^= )
+
+	/// Bitwise SHIFT-LEFT-EQUALS operator.
+	define_operator( <<= )
+
+	/// Bitwise SHIFT-RIGHT-EQUALS operator.
+	define_operator( >>= )
+
+	/// Arithmetic ADD operator.
+	define_operator( + )
+
+	/// Arithmetic MINUS operator.
+	define_operator( - )
+
+	/// Arithmetic MULTIPLY operator.
+	define_operator( * )
+
+	/// Arithmetic DIVIDE operator.
+	define_operator( / )
+
+	/// Arithmetic MODULUS operator.
+	define_operator( % )
+
+	/// Arithmetic ADD-EQUALS operator.
+	define_operator( += )
+
+	/// Arithmetic MINUS-EQUALS operator.
+	define_operator( -= )
+
+	/// Arithmetic MULTIPLY-EQUALS operator.
+	define_operator( *= )
+
+	/// Arithmetic DIVIDE-EQUALS operator.
+	define_operator( /= )
+
+	/// Arithmetic MODULUS-EQUALS operator.
+	define_operator( %= )
+
+
+#undef define_operator
 };// struct MMIO
 
 /**
@@ -599,10 +689,10 @@ void inline static pinMode(uint8_t _mode){
 
 void inline print_pin_registers(){
 	for(unsigned i=0; i < NUM_DIGITAL_PINS;++i){
-		Serial.print(F("\n Digital PIN ") + String(i) + F(" is "));
+		Serial.print( String(F("\n Digital PIN ")) + String(i) + F(" is ") );
 		switch(digitalPinToPort(i)){
 		case NOT_A_PIN: Serial.print(F("NOT a pin.")); break;
-		default: Serial.print(String(F("PORT")+char(digitalPinToPort(i)-1+'A'))); break;
+		default: Serial.print( String(F("PORT")) + char(digitalPinToPort(i)-1+'A') ); break;
 		}
 	}
 }
