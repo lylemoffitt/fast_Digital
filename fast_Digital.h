@@ -68,6 +68,7 @@ static_assert(bit_list<uint16_t>({15,14,7,3,1})==uint16_t(B11000000<<8 | B100010
 union Bit_Mask {
 	/// The whole value of the byte
 	byte value;
+
 	/// The individual bits
 	struct {
 		byte b0 : 1; ///< B00000001
@@ -79,6 +80,7 @@ union Bit_Mask {
 		byte b6 : 1; ///< B01000000
 		byte b7 : 1; ///< B10000000
 	};
+
 	/// The upper and lower half
 	struct {
 		byte lower_nibble : 4; ///< 0x0f
@@ -194,6 +196,13 @@ uint16_t constexpr inline letter_to_DDR_addr(char ltr){
 			ltr=='D' ? (uint16_t) & DDRD : 0;
 }
 
+// Simplifies defining all the operators necessary for MMIO
+#define define_operator( _op_ )                                 \
+template< typename data_t = value_type >                        \
+value_type inline operator _op_ (data_t val){                   \
+	return ((* (volatile data_t *)(addr) ) _op_ val);           \
+}                                                               \
+
 /**
  * Memory-Mapped Input/Output
  * \param	<addr>   The address of the port to be manipulated.
@@ -219,6 +228,9 @@ struct MMIO{
 		(* (volatile value_type *)(addr) ) = value;
 	}
 
+	/* ************************************************************************* */
+	// "Fancy" operators
+
 	/// Cast operator; performs the same operation as \c read()
 	template<typename data_t = value_type>
 	inline operator data_t (){
@@ -236,16 +248,13 @@ struct MMIO{
 		return (* (( value_type *)(addr)) ) = static_cast<value_type>(val);
 	}
 
+	/* ************************************************************************* */
+	// Bitwise operators
+
 	/// Bitwise NOT operator
 	value_type inline operator~() {
 		return ~static_cast<unsigned>(* (value_type *)(addr) );
 	}
-
-#define define_operator( _op_ )                                 \
-	template< typename data_t = value_type >                    \
-	value_type inline operator _op_ (data_t val){               \
-		return ((* (volatile data_t *)(addr) ) _op_ val);       \
-	}                                                           \
 
 	/// Bitwise AND operator.
 	define_operator( & )
@@ -277,6 +286,9 @@ struct MMIO{
 	/// Bitwise SHIFT-RIGHT-EQUALS operator.
 	define_operator( >>= )
 
+	/* ************************************************************************* */
+	// Arithmetic operators
+
 	/// Arithmetic ADD operator.
 	define_operator( + )
 
@@ -307,9 +319,9 @@ struct MMIO{
 	/// Arithmetic MODULUS-EQUALS operator.
 	define_operator( %= )
 
+};// struct MMIO
 
 #undef define_operator
-};// struct MMIO
 
 /**
  * Macro to easily specify PORTx, PINx, and DDRx by letter.
