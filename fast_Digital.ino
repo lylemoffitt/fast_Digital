@@ -5,7 +5,7 @@
 
 #define DATATYPE Bit_Mask
 
-MMIO<(uint16_t)&PORTD,Bit_Mask>
+REG(PORTD,Bit_Mask)
 #undef PORTD
 PORTD;
 

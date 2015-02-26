@@ -200,8 +200,10 @@ uint16_t constexpr inline letter_to_DDR_addr(char ltr){
 #define define_operator( _op_ )                                 \
 template< typename data_t = value_type >                        \
 value_type inline operator _op_ (data_t val){                   \
-	return ((* (volatile data_t *)(addr) ) _op_ val);           \
+    return ((* (volatile data_t *)(addr) ) _op_ val);           \
 }                                                               \
+
+#define REG( _PORT_ , _TYPE_ ) MMIO< (uint16_t)&_PORT_ , _TYPE_ >
 
 /**
  * Memory-Mapped Input/Output
