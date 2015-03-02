@@ -18,10 +18,12 @@
 #ifndef FAST_DIGITAL_H_
 #define FAST_DIGITAL_H_
 
-#include <Arduino.h>
-#include <binary.h>
 #include <stddef.h>
+#include <avr/io.h>
 
+#ifdef CONSTEXPR_ARDUINO_PINS
+#  include <Arduino.h>
+#endif
 
 /**
  * A simple struct representing a byte as a list of
@@ -59,8 +61,8 @@ struct bit_list{
 using _B = bit_list<byte>;
 using _W = bit_list<uint16_t>;
 
-static_assert(bit_list<>({7,3,1})==B10001010,"Bit order error.");
-static_assert(bit_list<uint16_t>({15,14,7,3,1})==uint16_t(B11000000<<8 | B10001010),"Byte order error.");
+static_assert(bit_list<>({7,3,1})==((1<<1)|(1<<3)|(1<<7)),"Bit order error.");
+static_assert(bit_list<uint16_t>({15,14,7,3,1})==uint16_t((1<<15)|(1<<14)|(1<<7)|(1<<3)|(1<<1)),"Byte order error.");
 
 /**
  * An 8-bit union with a plethora of different breakdowns.
@@ -95,8 +97,12 @@ union Bit_Mask {
 	 * Value-construct from a byte value
 	 */
 	template<typename value_type = byte>
-	constexpr Bit_Mask( value_type v) : value(static_cast<byte>(v)){
+	constexpr Bit_Mask( value_type v) : value(v){
 	}
+//	template<typename value_type = byte>
+//	constexpr Bit_Mask(const value_type & v) : value(static_cast<byte>(v)){
+//	}
+
 
 	/**
 	 * Construct from an list of bits positions:
@@ -121,15 +127,15 @@ union Bit_Mask {
 }; // union Bit_Mask
 
 static_assert(sizeof(Bit_Mask)==1,"Size of Bit_Mask incorrect: should be 1 byte.");
-static_assert(Bit_Mask({0,4,7}).value == B10010001,"Initializer bit-order mismatch.");
-static_assert(Bit_Mask(B00000001).b0,"Struct bit-field packing error: bit[0] mismatch.");
-static_assert(Bit_Mask(B00000010).b1,"Struct bit-field packing error: bit[1] mismatch.");
-static_assert(Bit_Mask(B00000100).b2,"Struct bit-field packing error: bit[2] mismatch.");
-static_assert(Bit_Mask(B00001000).b3,"Struct bit-field packing error: bit[3] mismatch.");
-static_assert(Bit_Mask(B00010000).b4,"Struct bit-field packing error: bit[4] mismatch.");
-static_assert(Bit_Mask(B00100000).b5,"Struct bit-field packing error: bit[5] mismatch.");
-static_assert(Bit_Mask(B01000000).b6,"Struct bit-field packing error: bit[6] mismatch.");
-static_assert(Bit_Mask(B10000000).b7,"Struct bit-field packing error: bit[7] mismatch.");
+static_assert(Bit_Mask({0,4,7}).value == ((1<<0)|(1<<4)|(1<<7)),"Initializer bit-order mismatch.");
+static_assert(Bit_Mask((1<<0)).b0,"Struct bit-field packing error: bit[0] mismatch.");
+static_assert(Bit_Mask((1<<1)).b1,"Struct bit-field packing error: bit[1] mismatch.");
+static_assert(Bit_Mask((1<<2)).b2,"Struct bit-field packing error: bit[2] mismatch.");
+static_assert(Bit_Mask((1<<3)).b3,"Struct bit-field packing error: bit[3] mismatch.");
+static_assert(Bit_Mask((1<<4)).b4,"Struct bit-field packing error: bit[4] mismatch.");
+static_assert(Bit_Mask((1<<5)).b5,"Struct bit-field packing error: bit[5] mismatch.");
+static_assert(Bit_Mask((1<<6)).b6,"Struct bit-field packing error: bit[6] mismatch.");
+static_assert(Bit_Mask((1<<7)).b7,"Struct bit-field packing error: bit[7] mismatch.");
 static_assert(Bit_Mask(0x30).upper_nibble==0x3,"Struct bit-field packing error: nibble mismatch.");
 static_assert(Bit_Mask(0x07).lower_nibble==0x7,"Struct bit-field packing error: nibble mismatch.");
 
@@ -150,11 +156,9 @@ constexpr uint16_t inline pin_to_port(uint8_t pin){
 constexpr uint16_t inline pin_to_bit_mask(uint8_t pin){
 	return *(digital_pin_to_bit_mask_PGM + pin );
 }
-
 constexpr uint16_t inline pin_to_timer(uint8_t pin){
 	return *(digital_pin_to_timer_PGM + pin );
 }
-
 constexpr uint16_t inline pin_to_output_register(uint8_t pin){
 	return *(port_to_output_PGM + *(digital_pin_to_port_PGM + pin) );
 }
@@ -164,7 +168,6 @@ constexpr uint16_t inline pin_to_input_register(uint8_t pin){
 constexpr uint16_t inline pin_to_mode_register(uint8_t pin){
 	return *(port_to_mode_PGM + *(digital_pin_to_port_PGM + pin) );
 }
-
 template<uint16_t PORT_, uint16_t PIN_, uint16_t DDR_>
 constexpr uint8_t inline mask_to_pin(uint16_t _mask,uint16_t indx=0){
 	return NUM_DIGITAL_PINS<=indx ? 0 :
@@ -173,27 +176,77 @@ constexpr uint8_t inline mask_to_pin(uint16_t _mask,uint16_t indx=0){
 		|| pin_to_input_register(indx) != PORT_
 		|| pin_to_mode_register(indx) != PIN_
 		) ? mask_to_pin<PORT_,PIN_,DDR_>(_mask,indx++) : indx;
-
 }
 #endif
 
 /// Get the address of the PORTx which ends with specified letter
 uint16_t constexpr inline letter_to_PORT_addr(char ltr){
-	return	ltr=='B' ? (uint16_t) & PORTB :
+	return
+#ifdef PORTA
+			ltr=='A' ? (uint16_t) & PORTA :
+#endif
+#ifdef PORTB
+			ltr=='B' ? (uint16_t) & PORTB :
+#endif
+#ifdef PORTC
 			ltr=='C' ? (uint16_t) & PORTC :
-			ltr=='D' ? (uint16_t) & PORTD : 0;
+#endif
+#ifdef PORTD
+			ltr=='D' ? (uint16_t) & PORTD :
+#endif
+#ifdef PORTE
+			ltr=='E' ? (uint16_t) & PORTE :
+#endif
+#ifdef PORTF
+			ltr=='F' ? (uint16_t) & PORTF :
+#endif
+	0;
 }
 /// Get the address of the PINx which ends with specified letter
 uint16_t constexpr inline letter_to_PIN_addr(char ltr){
-	return	ltr=='B' ? (uint16_t) & PINB :
+	return
+#ifdef PINA
+			ltr=='A' ? (uint16_t) & PINA :
+#endif
+#ifdef PINB
+			ltr=='B' ? (uint16_t) & PINB :
+#endif
+#ifdef PINC
 			ltr=='C' ? (uint16_t) & PINC :
-			ltr=='D' ? (uint16_t) & PIND : 0;
+#endif
+#ifdef PIND
+			ltr=='D' ? (uint16_t) & PIND :
+#endif
+#ifdef PINE
+			ltr=='E' ? (uint16_t) & PINE :
+#endif
+#ifdef PINF
+			ltr=='F' ? (uint16_t) & PINF :
+#endif
+	0;
 }
 /// Get the address of the DDRx which ends with specified letter
 uint16_t constexpr inline letter_to_DDR_addr(char ltr){
-	return	ltr=='B' ? (uint16_t) & DDRB :
+	return
+#ifdef DDRA
+			ltr=='A' ? (uint16_t) & DDRA :
+#endif
+#ifdef DDRB
+			ltr=='B' ? (uint16_t) & DDRB :
+#endif
+#ifdef DDRC
 			ltr=='C' ? (uint16_t) & DDRC :
-			ltr=='D' ? (uint16_t) & DDRD : 0;
+#endif
+#ifdef DDRD
+			ltr=='D' ? (uint16_t) & DDRD :
+#endif
+#ifdef DDRE
+			ltr=='E' ? (uint16_t) & DDRE :
+#endif
+#ifdef DDRF
+			ltr=='F' ? (uint16_t) & DDRF :
+#endif
+	0;
 }
 
 // Simplifies defining all the operators necessary for MMIO
@@ -249,6 +302,7 @@ struct MMIO{
 	value_type inline operator =  (data_t val){
 		return (* (( value_type *)(addr)) ) = static_cast<value_type>(val);
 	}
+//	define_operator( = )
 
 	/* ************************************************************************* */
 	// Bitwise operators
@@ -363,9 +417,9 @@ struct PIN_base<_pin>
 template<uint16_t _letter, uint16_t bit_place>
 struct PIN_base<_letter, bit_place>
 {
-	static_assert(letter_to_PORT_addr(_letter)!=NOT_A_PORT,	"Invalid pin letter: NOT_A_PORT");
-	static_assert(letter_to_PIN_addr(_letter)!=NOT_A_PORT,	"Invalid pin letter: NOT_A_PORT");
-	static_assert(letter_to_DDR_addr(_letter)!=NOT_A_PORT,	"Invalid pin letter: NOT_A_PORT");
+	static_assert(letter_to_PORT_addr(_letter)!=0,	"Invalid pin letter: NOT_A_PORT");
+	static_assert(letter_to_PIN_addr(_letter)!=0,	"Invalid pin letter: NOT_A_PORT");
+	static_assert(letter_to_DDR_addr(_letter)!=0,	"Invalid pin letter: NOT_A_PORT");
 	typedef  MMIO<letter_to_PORT_addr(_letter)> PORTX;
 	typedef  MMIO<letter_to_PIN_addr(_letter)>  PINX ;
 	typedef  MMIO<letter_to_DDR_addr(_letter)>  DDRX ;
@@ -485,9 +539,9 @@ struct PORT_base;
 template<uint16_t _letter>
 struct PORT_base <_letter>
 {
-	static_assert(letter_to_PORT_addr(_letter)!=NOT_A_PORT,"Invalid pin letter: NOT_A_PORT");
-	static_assert(letter_to_PIN_addr(_letter)!=NOT_A_PORT,"Invalid pin letter: NOT_A_PORT");
-	static_assert(letter_to_DDR_addr(_letter)!=NOT_A_PORT,"Invalid pin letter: NOT_A_PORT");
+	static_assert(letter_to_PORT_addr(_letter)!=0,"Invalid pin letter: NOT_A_PORT");
+	static_assert(letter_to_PIN_addr(_letter)!=0,"Invalid pin letter: NOT_A_PORT");
+	static_assert(letter_to_DDR_addr(_letter)!=0,"Invalid pin letter: NOT_A_PORT");
 	typedef  MMIO<letter_to_PORT_addr(_letter)> PORTX;
 	typedef  MMIO<letter_to_PIN_addr(_letter)>  PINX ;
 	typedef  MMIO<letter_to_DDR_addr(_letter)>  DDRX ;
@@ -604,7 +658,7 @@ void turnOffPWM(){}
 #endif
 
 //Inlined empty function call if \c NOT_ON_TIMER amounts to a NOP
-template<> void inline turnOffPWM<NOT_ON_TIMER>(){}
+template<> void inline turnOffPWM<0>(){}
 
 
 #if defined(TCCR1A) && defined(COM1A1)
@@ -701,14 +755,6 @@ void inline static pinMode(uint8_t _mode){
 }
 #endif // CONSTEXPR_ARDUINO_PINS
 
-void inline print_pin_registers(){
-	for(unsigned i=0; i < NUM_DIGITAL_PINS;++i){
-		Serial.print( String(F("\n Digital PIN ")) + String(i) + F(" is ") );
-		switch(digitalPinToPort(i)){
-		case NOT_A_PIN: Serial.print(F("NOT a pin.")); break;
-		default: Serial.print( String(F("PORT")) + char(digitalPinToPort(i)-1+'A') ); break;
-		}
-	}
-}
+
 
 #endif /* FAST_DIGITAL_H_ */
